@@ -59,6 +59,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (statusEl) statusEl.textContent = text;
   }
 
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   function formatElapsedTime(totalSeconds) {
     const seconds = Math.max(0, Number(totalSeconds) || 0);
     const minutes = Math.floor(seconds / 60);
@@ -148,6 +157,29 @@ document.addEventListener("DOMContentLoaded", () => {
       simSettingsToggle.setAttribute('aria-expanded', String(!isOpen));
       simSettingsPanel.style.display = isOpen ? 'none' : 'block';
     });
+  }
+
+  // Show/hide Time and Pass score fields based on simEnabled checkbox
+  function updateSimFieldVisibility() {
+    if (!simEnabled) return;
+    const isOn = simEnabled.checked;
+    const simTimeField = simTime?.closest('.sim-field');
+    const simPassField = simPass?.closest('.sim-field');
+    if (simTimeField) simTimeField.style.display = isOn ? '' : 'none';
+    if (simPassField) simPassField.style.display = isOn ? '' : 'none';
+  }
+  if (simEnabled) {
+    simEnabled.addEventListener('change', () => {
+      const isAuth = typeof window.__userAuthenticated !== 'undefined' ? window.__userAuthenticated : false;
+      if (!isAuth && simEnabled.checked) {
+        simEnabled.checked = false;
+        const anchor = simEnabled.closest('label.sim-toggle') || simEnabled.parentElement || simEnabled;
+        window.showAuthTooltip(anchor);
+        return;
+      }
+      updateSimFieldVisibility();
+    });
+    updateSimFieldVisibility();
   }
 
   // Sidebar / mobile controls
@@ -559,7 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (label) label.textContent = "Uploading… 0%";
 
       // 3) Start polling AFTER a short delay to let XHR get ahead
-      setTimeout(() => startProgressPoller(jobId), 800);
+      window.__pollerTimeout = setTimeout(() => startProgressPoller(jobId), 800);
 
       // 4) Upload via XHR (WITH client-side progress)
       const formData = new FormData();
@@ -586,8 +618,36 @@ document.addEventListener("DOMContentLoaded", () => {
 
       xhr.addEventListener("load", () => {
         __clientUploading = false;
-        window.__uploadFloor = 45;
 
+        // Check for server-side errors (e.g. file cap reached, bad file type)
+        if (xhr.status !== 200) {
+          let errMsg = "Upload failed.";
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.error) errMsg = data.error;
+          } catch (_) {}
+          // Cancel the pending poller timeout and any running poller
+          if (window.__pollerTimeout) { clearTimeout(window.__pollerTimeout); window.__pollerTimeout = null; }
+          if (window.__progressPoller) { clearInterval(window.__progressPoller); window.__progressPoller = null; }
+          if (wrap) wrap.style.display = "none";
+          if (bar) { bar.style.width = "0%"; bar.classList.remove("processing"); }
+          uploadForm?.querySelector("button[type=submit]")?.removeAttribute("disabled");
+          // Target the upload page flash container directly by ID
+          const flashTarget = document.getElementById("uploadFlashContainer")
+            || document.querySelector(".mobile_padding .flash-container");
+          if (flashTarget) {
+            const flash = document.createElement("div");
+            flash.className = "flash flash-error";
+            flash.style.whiteSpace = "normal";
+            flash.innerHTML = `<span class="flash-message">${errMsg}</span><button class="flash-close" onclick="this.parentElement.remove()" aria-label="Dismiss">×</button>`;
+            flashTarget.appendChild(flash);
+            flash.scrollIntoView({ behavior: "smooth", block: "center" });
+            setTimeout(() => { flash.classList.add("fade-out"); setTimeout(() => flash.remove(), 400); }, 6000);
+          }
+          return;
+        }
+
+        window.__uploadFloor = 45;
         animateToTarget(bar, label, 45, "Processing", 400);
 
         let bridgePct = 45;
@@ -797,13 +857,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const choicesHtml = ['A', 'B', 'C', 'D', 'E'].map((L, i) => {
         const raw = (q.choices?.[i] || '').trim();
-        const labelText = raw.replace(/^[A-E]\)\s*/i, '');
+        const labelText = escapeHtml(raw.replace(/^[A-E]\)\s*/i, '') || raw);
         const id = `q${idx}-${L}`;
         return `
           <div class="form-check ms-2">
             <input class="form-check-input" type="radio" name="q${idx}" id="${id}" value="${L}">
             <label class="form-check-label" for="${id}">
-              <span class="badge bg-light text-dark me-2">${L}.</span> ${labelText || raw}
+              <span class="badge bg-light text-dark me-2">${L}.</span> ${labelText}
             </label>
           </div>
         `;
@@ -811,7 +871,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Do not render inline explanation toggle before grading (only show after grading)
       item.innerHTML = `
-          <div class="fw-semibold mb-1">${q.question || ('Question ' + (idx + 1))}</div>
+          <div class="fw-semibold mb-1">${escapeHtml(q.question || ('Question ' + (idx + 1)))}</div>
           ${choicesHtml}
           <div class="mt-2" id="feedback-${idx}"></div>
         `;
@@ -898,18 +958,26 @@ document.addEventListener("DOMContentLoaded", () => {
           : `<span class="text-danger fw-bold answer-wrong d-inline-block">❌  Wrong. Correct answer: ${a.correct}</span>`;
 
         const explanation = lastQuiz[a.idx]?.explanation;
+        const explanationGated = lastQuiz[a.idx]?.explanation_gated;
         const authAllowFeedback = typeof window.__userAuthenticated !== 'undefined' ? window.__userAuthenticated : false;
-        const explanationHtml = (authAllowFeedback && explanation)
-          ? `
+
+        let explanationHtml = '';
+        if (authAllowFeedback && explanation) {
+          explanationHtml = `
           <div>
             <button class="explanation-toggle" type="button" onclick="showExplanation(${a.idx})" id="exp-btn-${a.idx}">
               ▶ Show explanation
             </button>
-            <div id="explanation-${a.idx}" class="explanation-panel">
-              ${explanation}
-            </div>
-          </div>`
-          : '';
+            <div id="explanation-${a.idx}" class="explanation-panel">${explanation}</div>
+          </div>`;
+        } else if (!authAllowFeedback && explanationGated) {
+          explanationHtml = `
+          <div>
+            <button class="explanation-toggle" type="button" onclick="showAuthTooltip(this)" id="exp-btn-${a.idx}">
+              ▶ Show explanation
+            </button>
+          </div>`;
+        }
 
         feedbackDiv.innerHTML = resultHtml + explanationHtml;
       }
@@ -943,18 +1011,21 @@ document.addEventListener("DOMContentLoaded", () => {
       const elapsedSec = Math.max(0, Math.round((Date.now() - start) / 1000));
       const avgPerQ = total > 0 ? Math.round(elapsedSec / total) : 0;
       const elapsedLabel = formatElapsedTime(elapsedSec);
+      const simIsOn = simEnabled?.checked ?? false;
       const passMark = simPass ? parseInt(simPass.value || '75', 10) : 75;
       const passed = pct >= passMark;
-      const progressClass = passed ? 'quiz-progress-correct' : 'quiz-progress-fail';
+      const progressClass = (simIsOn && !passed) ? 'quiz-progress-fail' : 'quiz-progress-correct';
 
-      const barBg = passed ? '' : 'background: #fca5a5;';
-      const barWidth = pct > 0 ? pct : (passed ? 0 : 4);
+      const barBg = (simIsOn && !passed) ? 'background: #fca5a5;' : '';
+      const barWidth = pct > 0 ? pct : 4;
+      const cardTitle = simIsOn ? 'Exam Summary' : 'Summary';
+      const passMarkHtml = simIsOn ? `<p><strong>Pass Mark:</strong> ${passMark}%</p>` : '';
 
       quizResultsContainer.innerHTML = `
         <div class="quiz-result-card">
-          <h3>Exam Summary</h3>
-          <p><strong>Score:</strong> ${pct}%</p>
-          <p><strong>Pass Mark:</strong> ${passMark}%</p>
+          <h3>${cardTitle}</h3>
+          <p><strong>Score:</strong> ${correctCount}/${total} (${pct}%)</p>
+          ${passMarkHtml}
           <div class="quiz-progress-bar" style="${barBg}">
             <div class="quiz-progress ${progressClass}" style="width:${barWidth}%"></div>
           </div>
@@ -967,7 +1038,6 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
 
         <div class="quiz-result-card">
-          <h3>Detailed Review</h3>
           <a href="/results" class="quiz-view-results-btn">View Results →</a>
         </div>
       `;
@@ -989,6 +1059,56 @@ document.addEventListener("DOMContentLoaded", () => {
   if (submitQuizBtn) submitQuizBtn.addEventListener('click', () => gradeQuiz(false));
 
   // Toggle explanation panel for a quiz question (only visible after grading)
+  window.showAuthTooltip = function (anchorEl) {
+    document.querySelectorAll('.auth-tooltip').forEach(t => t.remove());
+
+    const tip = document.createElement('div');
+    tip.className = 'auth-tooltip';
+    tip.innerHTML = '🔒 Login to access this feature <a href="#" class="auth-tooltip-link">Sign in →</a>';
+    tip.style.visibility = 'hidden';
+    document.body.appendChild(tip);
+
+    requestAnimationFrame(() => {
+      const rect = anchorEl.getBoundingClientRect();
+      const tipW = tip.offsetWidth;
+      const tipH = tip.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let left = rect.right + 10;
+      let top = rect.top + (rect.height - tipH) / 2;
+
+      if (left + tipW > vw - 10) {
+        left = Math.max(10, Math.min(rect.left, vw - tipW - 10));
+        top = rect.bottom + 8;
+        tip.classList.add('auth-tooltip-below');
+      }
+
+      tip.style.left = Math.max(8, Math.min(left, vw - tipW - 8)) + 'px';
+      tip.style.top  = Math.max(8, Math.min(top,  vh - tipH - 8)) + 'px';
+      tip.style.visibility = '';
+    });
+
+    const timer = setTimeout(() => tip.remove(), 4000);
+
+    function dismiss(e) {
+      if (!tip.contains(e.target) && e.target !== anchorEl) {
+        tip.remove();
+        clearTimeout(timer);
+        document.removeEventListener('click', dismiss, true);
+      }
+    }
+    setTimeout(() => document.addEventListener('click', dismiss, true), 100);
+
+    tip.querySelector('.auth-tooltip-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      tip.remove();
+      clearTimeout(timer);
+      document.removeEventListener('click', dismiss, true);
+      document.querySelector('.sa-open-login')?.click();
+    });
+  };
+
   window.showExplanation = function (idx) {
     const el = document.getElementById(`explanation-${idx}`);
     const btn = document.getElementById(`exp-btn-${idx}`);
@@ -1325,7 +1445,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json();
 
       // Apply same formatting as server: **bold** + newlines
-      let html = (data.summary || "(No summary stored yet for this document.)")
+      let html = escapeHtml(data.summary || "(No summary stored yet for this document.)")
         .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
         .replace(/\n/g, "<br>");
       sumTxt.innerHTML = html;

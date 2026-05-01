@@ -194,7 +194,7 @@
                     </a>
                     <form method="post" action="{% url 'logout' %}" class="sa-dropdown-form">
                         {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <input type="hidden" name="next" value="{% url 'home' %}">
                         <button type="submit" class="sa-dropdown-item sa-dropdown-logout">
                             <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="currentColor">
                                 <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z"/>
@@ -281,7 +281,7 @@
                 <div class="flash-container">
                     {% if messages %}
                     {% for message in messages %}
-                    {% if "auth-login" not in message.tags and "auth-signup" not in message.tags %}
+                    {% if "auth-login" not in message.tags and "auth-signup" not in message.tags and "You have been signed out" not in message|stringformat:"s" %}
                     <div class="flash flash-{{ message.level_tag }}" data-message-tags="{{ message.tags }}">
                         <span class="flash-message">{{ message }}</span>
                         <button class="flash-close" onclick="this.parentElement.remove()"

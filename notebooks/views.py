@@ -30,6 +30,7 @@ from django.utils.encoding import force_str
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.cache import never_cache
 from django.core.cache import cache
+from django.template.loader import render_to_string
 
 # Document parsing
 from pypdf import PdfReader
@@ -365,11 +366,32 @@ def register_user(request):
         return redirect(redirect_url)
 
     user.set_password(password)
+    user.is_active = False
     user.save()
+
+    from .models import EmailVerificationToken
+    verification = EmailVerificationToken.objects.create(user=user)
+
+    verification_url = request.build_absolute_uri(
+        f"/verify-email/{verification.token}/"
+    )
+    html_body = render_to_string("registration/email_verification.html", {
+        "first_name": first_name,
+        "verification_url": verification_url,
+    })
+    send_mail(
+        subject="Verify your StudyAssists email",
+        message=f"Hi {first_name},\n\nVerify your account: {verification_url}",
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[email],
+        html_message=html_body,
+        fail_silently=True,
+    )
+
     messages.success(
         request,
-        "Account created. Please sign in.",
-        extra_tags="auth-login auth-signup-success",
+        "Account created! Check your email to verify your address before signing in.",
+        extra_tags="auth-signup auth-signup-success",
     )
     return redirect(redirect_url)
 
@@ -393,6 +415,18 @@ def login_user(request):
 
     user = authenticate(request, username=email, password=password)
     if user is None:
+        # Check if account exists but email not yet verified
+        try:
+            unverified = User.objects.get(username=email, is_active=False)
+            if hasattr(unverified, 'email_verification'):
+                messages.error(
+                    request,
+                    "Please verify your email address before signing in. Check your inbox.",
+                    extra_tags="auth-login",
+                )
+                return redirect(redirect_url)
+        except User.DoesNotExist:
+            pass
         _record_attempt(request, "login", window_seconds=900)  # only count failures
         messages.error(request, "Invalid email or password.", extra_tags="auth-login")
         return redirect(redirect_url)
@@ -411,7 +445,54 @@ def logout_user(request):
     return redirect(_get_safe_redirect_url(request))
 
 
+@never_cache
+def verify_email(request, token):
+    from .models import EmailVerificationToken
+    try:
+        verification = EmailVerificationToken.objects.select_related('user').get(token=token)
+        user = verification.user
+        user.is_active = True
+        user.save()
+        verification.delete()
+        messages.success(
+            request,
+            "Email verified! You can now sign in.",
+            extra_tags="auth-login auth-signup-success",
+        )
+    except EmailVerificationToken.DoesNotExist:
+        messages.error(
+            request,
+            "This verification link is invalid or has already been used.",
+            extra_tags="auth-login",
+        )
+    return redirect("home")
+
+
+def _sync_user_docs_to_session(request):
+    """Restore any DB-persisted documents for the logged-in user into the session."""
+    from .models import UserDocument
+    user_docs = UserDocument.objects.filter(user=request.user)
+    session_docs = request.session.get("docs", {})
+    changed = False
+    for doc in user_docs:
+        if doc.filename not in session_docs:
+            session_docs[doc.filename] = {
+                "persist_dir": doc.persist_dir,
+                "summary": doc.summary,
+            }
+            changed = True
+        elif doc.summary and not session_docs[doc.filename].get("summary"):
+            session_docs[doc.filename]["summary"] = doc.summary
+            changed = True
+    if changed:
+        request.session["docs"] = session_docs
+
+
 def _get_upload_page_context(request):
+    # Restore persisted docs for logged-in users before anything else
+    if request.user.is_authenticated:
+        _sync_user_docs_to_session(request)
+
     job_id = request.session.get("job_id")
     if job_id:
         st = cache.get(f"job:{job_id}") or {}
@@ -432,6 +513,13 @@ def _get_upload_page_context(request):
 
                 request.session["uploaded_filename"] = filename
                 request.session["summary_text"] = st["summary"]
+
+                # Persist summary back to DB for authenticated users
+                if request.user.is_authenticated:
+                    from .models import UserDocument
+                    UserDocument.objects.filter(
+                        user=request.user, filename=filename
+                    ).update(summary=st["summary"])
 
             cache.delete(f"job:{job_id}")
             request.session.pop("job_id", None)
@@ -540,6 +628,10 @@ def delete_doc(request):
     docs.pop(filename, None)
     request.session["docs"] = docs
 
+    if request.user.is_authenticated:
+        from .models import UserDocument
+        UserDocument.objects.filter(user=request.user, filename=filename).delete()
+
     if request.session.get("uploaded_filename") == filename:
         request.session.pop("uploaded_filename", None)
         request.session.pop("summary_text", None)
@@ -630,6 +722,21 @@ def upload(request):
         messages.error(request, msg)
         return redirect("upload_notebook")
 
+    # Enforce 5-file cap
+    MAX_DOCS = 5
+    if request.user.is_authenticated:
+        from .models import UserDocument
+        current_count = UserDocument.objects.filter(user=request.user).count()
+    else:
+        current_count = len(request.session.get("docs", {}))
+
+    if current_count >= MAX_DOCS:
+        msg = "Maximum of 5 Uploads reached. Delete one."
+        if is_xhr:
+            return JsonResponse({"ok": False, "error": msg}, status=400)
+        messages.error(request, msg)
+        return redirect("upload_notebook")
+
     text, base, filename = process_uploaded_file(f)
 
     cache.set(f"job:{job_id}", {"phase": "queued", "pct": 40, "filename": filename})
@@ -647,6 +754,14 @@ def upload(request):
     request.session["uploaded_filename"] = filename
     request.session["summary_text"] = None
     request.session["summary_generated"] = False
+
+    if request.user.is_authenticated:
+        from .models import UserDocument
+        UserDocument.objects.update_or_create(
+            user=request.user,
+            filename=filename,
+            defaults={"persist_dir": persist_dir, "summary": ""},
+        )
 
     t = Thread(
         target=_process_job,
@@ -866,9 +981,10 @@ def generate_quiz(request):
     t_parse.done(f"(parsed={len(quiz)})")
 
     t_total.done()
-    # Do not expose explanations to anonymous users — strip them server-side
+    # Do not expose explanation text to anonymous users, but flag that one exists
     if not request.user.is_authenticated:
         for q in quiz:
+            q["explanation_gated"] = bool(q.get("explanation"))
             q["explanation"] = ""
 
     return JsonResponse({"ok": True, "quiz": quiz})
@@ -992,14 +1108,10 @@ def send_feedback(request):
         return JsonResponse(
             {"status": "success", "message": "Thank you! Your feedback has been sent."}
         )
-    except Exception as e:
-        # log the full exception so we can inspect it in the console/logs
-        import logging
-
+    except Exception:
         logging.getLogger(__name__).exception("feedback send failed")
-        # tell the client what went wrong (remove before production)
         return JsonResponse(
-            {"status": "error", "message": f"Unable to send feedback: {e}"}
+            {"status": "error", "message": "Unable to send feedback. Please try again later."}
         )
 
 
