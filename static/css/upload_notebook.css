@@ -1457,6 +1457,68 @@ footer {
 }
 
 /* Explanation toggle button */
+/* ── Auth tooltip (login-gate popover) ──────────────────────── */
+.auth-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  pointer-events: auto;
+  animation: authTipIn 0.18s ease;
+}
+
+/* Arrow pointing left — tooltip sits to the right of the anchor */
+.auth-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: #1e293b;
+}
+
+/* Below variant — arrow points up */
+.auth-tooltip.auth-tooltip-below {
+  animation: authTipInDown 0.18s ease;
+}
+.auth-tooltip.auth-tooltip-below::before {
+  right: auto;
+  left: 14px;
+  top: auto;
+  bottom: 100%;
+  transform: none;
+  border: 6px solid transparent;
+  border-bottom-color: #1e293b;
+}
+
+.auth-tooltip-link {
+  color: #60a5fa;
+  text-decoration: none;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.auth-tooltip-link:hover { color: #93c5fd; }
+
+@keyframes authTipIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes authTipInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* ─────────────────────────────────────────────────────────── */
+
 .explanation-toggle {
   display: inline-flex;
   align-items: center;
@@ -1648,14 +1710,6 @@ footer {
 
 
 
-/* Desktop: cancel the extra 15px padding from .mobile_padding so flash matches .features width */
-@media (min-width: 668px) {
-  .mobile_padding .flash-container {
-    margin-left: -15px;
-    margin-right: -15px;
-    width: calc(100% + 30px);
-  }
-}
 
 @media (max-width: 667px) {
 

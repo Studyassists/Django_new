@@ -38,4 +38,6 @@ urlpatterns = [
 
     path("auth/google/", views.google_login, name="google_login"),
     path("auth/google/callback/", views.google_callback, name="google_callback"),
+
+    path("verify-email/<str:token>/", views.verify_email, name="verify_email"),
 ]

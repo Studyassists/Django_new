@@ -91,7 +91,7 @@
         </div>
 
         <div class="mobile_padding">
-            <div class="flash-container">
+            <div class="flash-container" id="uploadFlashContainer">
                 {% if messages %}
                 {% for message in messages %}
                 {% if "auth-login" not in message.tags and "auth-signup" not in message.tags %}
@@ -223,7 +223,7 @@
                 <div class="generate-row mt-3" style="margin-top:10px;">
                     <button id="simSettingsToggle" type="button" class="question-toggle-btn" aria-expanded="false"
                         aria-controls="simSettingsPanel">
-                        Simulation Settings <i class="fa fa-chevron-down collapse-icon"></i>
+                        Exam Simulation <i class="fa fa-chevron-down collapse-icon"></i>
                     </button>
 
                     <button id="generateBtn" type="button" class="btn btn-primary mybutton">
@@ -296,7 +296,8 @@
         </div>
 
         <!-- Floating countdown shown when simulationBanner scrolls out of view -->
-        <div id="simFloatingTimer" class="sim-floating-timer" style="display:none;" aria-hidden="true" aria-live="polite">
+        <div id="simFloatingTimer" class="sim-floating-timer" style="display:none;" aria-hidden="true"
+            aria-live="polite">
             <span class="sim-floating-icon">⏱</span>
             <span id="simFloatingCountdown">00:00</span>
         </div>
