@@ -173,8 +173,23 @@ document.addEventListener("DOMContentLoaded", () => {
       const isAuth = typeof window.__userAuthenticated !== 'undefined' ? window.__userAuthenticated : false;
       if (!isAuth && simEnabled.checked) {
         simEnabled.checked = false;
-        const anchor = simEnabled.closest('label.sim-toggle') || simEnabled.parentElement || simEnabled;
-        window.showAuthTooltip(anchor);
+        const msg = document.getElementById('simAuthMsg');
+        if (msg) {
+          msg.style.display = 'flex';
+          // Wire up the Sign in link once
+          const link = msg.querySelector('.sim-auth-msg-link');
+          if (link && !link.dataset.wired) {
+            link.dataset.wired = '1';
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              msg.style.display = 'none';
+              document.querySelector('.sa-open-login')?.click();
+            });
+          }
+          // Auto-hide after 5s
+          clearTimeout(msg._hideTimer);
+          msg._hideTimer = setTimeout(() => { msg.style.display = 'none'; }, 5000);
+        }
         return;
       }
       updateSimFieldVisibility();
@@ -1065,46 +1080,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const tip = document.createElement('div');
     tip.className = 'auth-tooltip';
     tip.innerHTML = '🔒 Login to access this feature <a href="#" class="auth-tooltip-link">Sign in →</a>';
-    tip.style.visibility = 'hidden';
-    document.body.appendChild(tip);
 
-    requestAnimationFrame(() => {
-      const rect = anchorEl.getBoundingClientRect();
-      const tipW = tip.offsetWidth;
-      const tipH = tip.offsetHeight;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+    // Insert directly after the button — scrolls with the page naturally
+    anchorEl.insertAdjacentElement('afterend', tip);
 
-      let left = rect.right + 10;
-      let top = rect.top + (rect.height - tipH) / 2;
+    const timer = setTimeout(() => cleanup(), 4000);
 
-      if (left + tipW > vw - 10) {
-        left = Math.max(10, Math.min(rect.left, vw - tipW - 10));
-        top = rect.bottom + 8;
-        tip.classList.add('auth-tooltip-below');
-      }
-
-      tip.style.left = Math.max(8, Math.min(left, vw - tipW - 8)) + 'px';
-      tip.style.top  = Math.max(8, Math.min(top,  vh - tipH - 8)) + 'px';
-      tip.style.visibility = '';
-    });
-
-    const timer = setTimeout(() => tip.remove(), 4000);
+    function cleanup() {
+      tip.remove();
+      clearTimeout(timer);
+      document.removeEventListener('click', dismiss, true);
+    }
 
     function dismiss(e) {
-      if (!tip.contains(e.target) && e.target !== anchorEl) {
-        tip.remove();
-        clearTimeout(timer);
-        document.removeEventListener('click', dismiss, true);
-      }
+      if (!tip.contains(e.target) && e.target !== anchorEl) cleanup();
     }
     setTimeout(() => document.addEventListener('click', dismiss, true), 100);
 
     tip.querySelector('.auth-tooltip-link').addEventListener('click', (e) => {
       e.preventDefault();
-      tip.remove();
-      clearTimeout(timer);
-      document.removeEventListener('click', dismiss, true);
+      cleanup();
       document.querySelector('.sa-open-login')?.click();
     });
   };
