@@ -1457,64 +1457,55 @@ footer {
 }
 
 /* Explanation toggle button */
-/* ── Auth tooltip (login-gate popover) ──────────────────────── */
-.auth-tooltip {
-  position: fixed;
-  z-index: 9999;
-  background: #1e293b;
-  color: #f1f5f9;
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 500;
+/* ── Sim panel inline auth message ─────────────────────────── */
+.sim-auth-msg {
   display: flex;
   align-items: center;
-  gap: 10px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  white-space: nowrap;
-  pointer-events: auto;
+  gap: 6px;
+  padding: 7px 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e40af;
   animation: authTipIn 0.18s ease;
 }
 
-/* Arrow pointing left — tooltip sits to the right of the anchor */
-.auth-tooltip::before {
-  content: '';
-  position: absolute;
-  right: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 6px solid transparent;
-  border-right-color: #1e293b;
+.sim-auth-msg-link {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
 }
+.sim-auth-msg-link:hover { text-decoration: underline; }
+/* ─────────────────────────────────────────────────────────── */
 
-/* Below variant — arrow points up */
-.auth-tooltip.auth-tooltip-below {
-  animation: authTipInDown 0.18s ease;
-}
-.auth-tooltip.auth-tooltip-below::before {
-  right: auto;
-  left: 14px;
-  top: auto;
-  bottom: 100%;
-  transform: none;
-  border: 6px solid transparent;
-  border-bottom-color: #1e293b;
+/* ── Auth tooltip (login-gate — inline, scrolls with content) ── */
+.auth-tooltip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  background: #1e293b;
+  color: #f1f5f9;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  animation: authTipIn 0.18s ease;
 }
 
 .auth-tooltip-link {
   color: #60a5fa;
   text-decoration: none;
   font-weight: 700;
-  flex-shrink: 0;
 }
 .auth-tooltip-link:hover { color: #93c5fd; }
 
 @keyframes authTipIn {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes authTipInDown {
-  from { opacity: 0; transform: translateY(-6px); }
+  from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 /* ─────────────────────────────────────────────────────────── */
