@@ -943,7 +943,6 @@ def generate_quiz(request):
 
     t_parse = Timer("parse LLM output")
     text = resp.choices[0].message.content.strip()
-    print("RAW LLM OUTPUT:\n", text)
     blocks = re.split(r"\n(?=Question\s*\d+)", text.strip())
     quiz = []
     for b in blocks:
