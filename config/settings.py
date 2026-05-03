@@ -16,14 +16,14 @@ DEBUG = os.getenv("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
 
 # --- HTTPS / cookie security (production only) ---
-#if not DEBUG:
-#    SECURE_SSL_REDIRECT = True
-#    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-#    SESSION_COOKIE_SECURE = True
-#    CSRF_COOKIE_SECURE = True
-#    SECURE_HSTS_SECONDS = 31536000          # 1 year
-#    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-#    SECURE_HSTS_PRELOAD = True
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000          # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",

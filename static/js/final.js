@@ -1001,6 +1001,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Calculate score
     const pct = Math.round((correctCount / total) * 100);
+
+    // Compute elapsed time and avg per question (needed for both save and display)
+    const start = window.__quizStartTime || Date.now();
+    const elapsedSec = Math.max(0, Math.round((Date.now() - start) / 1000));
+    const avgPerQ = total > 0 ? Math.round(elapsedSec / total) : 0;
+
     // Save result to server
     const filename = getSelectedDocName();
     if (filename) {
@@ -1011,7 +1017,8 @@ document.addEventListener("DOMContentLoaded", () => {
           filename: filename,
           correct: correctCount,
           total: total,
-          percent: pct
+          percent: pct,
+          avg_time: avgPerQ
         })
       }).catch(() => {
         // fail silently – quiz UI still works
@@ -1021,10 +1028,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Build and show the detailed cards in the exam summary container
     if (quizResultsContainer) {
-      // compute elapsed time and avg per question
-      const start = window.__quizStartTime || Date.now();
-      const elapsedSec = Math.max(0, Math.round((Date.now() - start) / 1000));
-      const avgPerQ = total > 0 ? Math.round(elapsedSec / total) : 0;
       const elapsedLabel = formatElapsedTime(elapsedSec);
       const simIsOn = simEnabled?.checked ?? false;
       const passMark = simPass ? parseInt(simPass.value || '75', 10) : 75;
