@@ -1005,6 +1005,7 @@ def save_result(request):
     correct = payload.get("correct")
     total = payload.get("total")
     percent = payload.get("percent")
+    avg_time = payload.get("avg_time")
 
     if not filename or correct is None or total is None:
         return JsonResponse({"ok": False, "error": "Missing result data"}, status=400)
@@ -1023,6 +1024,7 @@ def save_result(request):
             "correct": correct_i,
             "total": total_i,
             "percent": percent_i,
+            "avg_time": int(avg_time) if avg_time is not None else None,
             # store both a human-friendly server-local string and an ISO UTC timestamp
             "test_datetime": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
             "test_ts": datetime.utcnow().isoformat() + "Z",

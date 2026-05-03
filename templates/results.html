@@ -54,6 +54,7 @@
                             <th>Uploaded File</th>
                             <th>Score</th>
                             <th>Percentage</th>
+                            <th>Avg. Time per Question</th>
                             <th>Date & Time</th>
                         </tr>
                     </thead>
@@ -64,6 +65,7 @@
                             <td data-label="Uploaded File">{{ result.filename }}</td>
                             <td data-label="Score" class="score">{{ result.correct }}/{{ result.total }}</td>
                             <td data-label="Percentage" class="score">{{ result.percent }}%</td>
+                            <td data-label="Avg. Time per Question" class="score">{% if result.avg_time is not None %}{{ result.avg_time }} sec{% else %}—{% endif %}</td>
                             <td data-label="Date & Time" data-ts="{{ result.test_ts|default:'' }}">{{ result.test_datetime }}</td>
                         </tr>
                         {% endfor %}
@@ -71,7 +73,7 @@
 
 
                         <tr class="result_table">
-                            <td colspan="4" class="no-result-message">
+                            <td colspan="5" class="no-result-message">
                                 No result currently available. Do a <a href="{% url 'upload_notebook' %}">
                                     Quiz
                                 </a>
